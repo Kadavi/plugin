@@ -353,7 +353,7 @@ public class CameraActivity extends Activity {
                 });
             }
         } catch (Exception ex) {
-            finishWithError("Failed to take image", ex);
+            finishWithError("Failed to take image.", ex);
         }
     }
     
@@ -382,7 +382,7 @@ public class CameraActivity extends Activity {
                 }
             });
         } catch (Exception ex) {
-            finishWithError("Failed to take image", ex);
+            finishWithError("Failed to take image.", ex);
         }
     }
     
