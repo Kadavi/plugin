@@ -19,7 +19,7 @@ public class Camera extends CordovaPlugin {
 	@Override
 	public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
 		if (!hasRearFacingCamera()) {
-			String message = "No rear camera detected";
+			String message = "No rear camera detected.";
 			callbackContext.error(message);
 			Log.d(TAG, message);
 			return false;
@@ -63,7 +63,7 @@ public class Camera extends CordovaPlugin {
 			if (errorMessage != null) {
 				callbackContext.error(errorMessage);
 			} else {
-				callbackContext.error("Failed to take picture");
+				callbackContext.error("Failed to take picture.");
 			}
 		}
 		 
