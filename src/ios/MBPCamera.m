@@ -13,27 +13,31 @@
     
     if (![UIImagePickerController isCameraDeviceAvailable:UIImagePickerControllerCameraDeviceRear]) {
         // no rear camera detected
-        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No rear camera detected"];
+        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No rear camera detected."];
         [self.commandDelegate sendPluginResult:result callbackId:command.callbackId];
     } else if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera]) {
         // camera is not accessible
-        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera is not accessible"];
+        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Camera is not accessible."];
         [self.commandDelegate sendPluginResult:result callbackId:command.callbackId];
     } else {
         MBPCameraViewController *cameraViewController = [[MBPCameraViewController alloc] initWithCallback:^(UIImage *image) {
-            UIImage *scaledImage = [self scaleImage:image toSize:CGSizeMake(targetWidth, targetHeight)];
-            NSData *scaledImageData = UIImageJPEGRepresentation(scaledImage, quality / 100);
-            // convert NSData to base64 string
-            NSString *base64scaledImageData;
-            if ([scaledImageData respondsToSelector:@selector(base64EncodedStringWithOptions:)]) {
-                base64scaledImageData = [scaledImageData base64EncodedStringWithOptions:kNilOptions]; //ios 7+
+            if (image == nil) {
+                CDVPluginResult *result = [CDVPluginResult resultWithStatus: CDVCommandStatus_ERROR messageAsString: nil];
+                [self.commandDelegate sendPluginResult:result callbackId:command.callbackId];
             } else {
-                base64scaledImageData = [scaledImageData base64Encoding]; // pre ios 7
+                UIImage *scaledImage = [self scaleImage:image toSize:CGSizeMake(targetWidth, targetHeight)];
+                NSData *scaledImageData = UIImageJPEGRepresentation(scaledImage, quality / 100);
+                // convert NSData to base64 string
+                NSString *base64scaledImageData;
+                if ([scaledImageData respondsToSelector:@selector(base64EncodedStringWithOptions:)]) {
+                    base64scaledImageData = [scaledImageData base64EncodedStringWithOptions:kNilOptions]; //ios 7+
+                } else {
+                    base64scaledImageData = [scaledImageData base64Encoding]; // pre ios 7
+                }
+                
+                CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString: base64scaledImageData];
+                [self.commandDelegate sendPluginResult:result callbackId:command.callbackId];
             }
-            
-            CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
-                                                        messageAsString: base64scaledImageData];
-            [self.commandDelegate sendPluginResult:result callbackId:command.callbackId];
             [self.viewController dismissViewControllerAnimated:YES completion:nil];
         } titleName:title logoFilename:logoFilename description:description ];
         [self.viewController presentViewController:cameraViewController animated:YES completion:nil];
