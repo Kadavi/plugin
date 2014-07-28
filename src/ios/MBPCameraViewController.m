@@ -464,11 +464,7 @@ static const CGFloat kAspectRatio = 125.0f / 86;
 }
 
 - (void)dismissCameraPreview {
-<<<<<<< HEAD
     _callback(nil);
-=======
-    [self dismissViewControllerAnimated:YES completion:nil];
->>>>>>> f95592bdb9d44306ebb0b4652c7237a8b58385f9
 }
 
 - (void)takePictureWaitingForCameraToFocus {
