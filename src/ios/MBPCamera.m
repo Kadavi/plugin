@@ -67,4 +67,8 @@
     return scaledImage;
 }
 
+<<<<<<< HEAD
 @end
+=======
+@end
+>>>>>>> f95592bdb9d44306ebb0b4652c7237a8b58385f9
