@@ -25,8 +25,8 @@
             <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
             <uses-permission android:name="android.permission.CAMERA" />
             
-            <uses-feature android:name="android.hardware.camera" android:required="true" />
-            <uses-feature android:name="android.hardware.camera.autofocus" android:required="true" />
+            <uses-feature android:name="android.hardware.camera" android:required="false" />
+            <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
         </config-file>
         <config-file target="AndroidManifest.xml" parent="/manifest/application" >
             <activity android:configChanges="orientation" android:name="org.schoolsfirstfcu.mobile.plugin.checkcapture.CameraActivity" android:screenOrientation="portrait" />

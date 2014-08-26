@@ -1,100 +1,74 @@
 package org.schoolsfirstfcu.mobile.plugin.checkcapture;
 
+import java.io.IOException;
+
+import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.hardware.Camera;
-import android.hardware.Camera.Size;
+import android.os.Build;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
+@SuppressLint("ClickableViewAccessibility")
+@TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
 public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback {
-
     private static final String TAG = CameraPreview.class.getSimpleName();
-
-    private final Camera camera;
-
-    public CameraPreview(Context context, Camera camera) {
+    private final CameraActivity cameraActivity;
+    
+    public CameraPreview(Context context) {
         super(context);
-        this.camera = camera;
+        this.cameraActivity = (CameraActivity) context;
+        this.setFocusable(true);
+        this.setFocusableInTouchMode(true);
         getHolder().addCallback(this);
     }
-
+    
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         try {
-            // TODO: show activity indicator here, it can take almost 1 second to show the preview
-            camera.setPreviewDisplay(holder);
-            camera.startPreview();
+            cameraActivity.getCamera().setPreviewDisplay(holder);
+            cameraActivity.getCamera().setDisplayOrientation(90);
+            cameraActivity.getCamera().startPreview();
         } catch (IOException e) {
             Log.d(TAG, "Error starting camera preview: " + e.getMessage());
         }
     }
-
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        // nothing to do here
-    }
-
+    
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         if (getHolder().getSurface() == null) {
             return;
         }
+        Camera camera = cameraActivity.getCamera();
         try {
             camera.stopPreview();
-        } catch (Exception e){
+        } catch (Exception e) {
             Log.d(TAG, "Tried to stop a non-existent preview: " + e.getMessage());
         }
-
+        
         try {
-            Camera.Parameters cameraSettings = camera.getParameters();
-            Size previewSize = optimimalPreviewSize(width, height);
-            cameraSettings.setPreviewSize(previewSize.width, previewSize.height);
-            camera.setParameters(cameraSettings);
             camera.setPreviewDisplay(holder);
-            camera.setDisplayOrientation(90);
             camera.startPreview();
-        } catch (Exception e){
+        } catch (Exception e) {
             Log.d(TAG, "Error starting camera preview: " + e.getMessage());
         }
     }
-
-    private Size optimimalPreviewSize(int targetWidth, int targetHeight) {
-        List<Size> sizes = camera.getParameters().getSupportedPreviewSizes();
-        float targetAspectRatio = (float) targetWidth / targetHeight;
-        List<Size> sizesWithMatchingAspectRatios = filterByAspectRatio(targetAspectRatio, sizes);
-        if (sizesWithMatchingAspectRatios.size() > 0) {
-            return optimalSizeForHeight(sizesWithMatchingAspectRatios, targetHeight);
+    
+    @Override
+    public boolean onTouchEvent(final MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_UP && !cameraActivity.isInprogress()) {
+            cameraActivity.takePictureWithAutoFocus();
         }
-        return optimalSizeForHeight(sizes, targetHeight);
+        return true;
     }
-
-    private List<Size> filterByAspectRatio(float targetAspectRatio, List<Size> sizes) {
-        List<Size> filteredSizes = new ArrayList<Size>();
-        for (Size size : sizes) {
-            // reverse the ratio calculation as we've flipped the orientation
-            float aspectRatio = (float)size.height / size.width;
-            if (aspectRatio == targetAspectRatio) {
-                filteredSizes.add(size);
-            }
-        }
-        return filteredSizes;
+    
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        // TODO Auto-generated method stub
+        
     }
-
-    private Size optimalSizeForHeight(List<Size> sizes, int targetHeight) {
-        Size optimalSize = null;
-        float minimumHeightDelta = Float.MAX_VALUE;
-        for (Size size : sizes) {
-            if (Math.abs(size.height - targetHeight) < minimumHeightDelta) {
-                optimalSize = size;
-                minimumHeightDelta = Math.abs(size.height - targetHeight);
-            }
-        }
-        return optimalSize;
-    }
-
+    
 }

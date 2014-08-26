@@ -5,10 +5,10 @@ import java.util.List;
 
 import org.apache.cordova.LOG;
 
+import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.ProgressDialog;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -17,9 +17,7 @@ import android.graphics.Point;
 import android.hardware.Camera;
 import android.hardware.Camera.AutoFocusCallback;
 import android.hardware.Camera.PictureCallback;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.net.Uri;
+import android.hardware.Camera.ShutterCallback;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -27,7 +25,6 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.View.OnTouchListener;
 import android.view.ViewGroup.LayoutParams;
 import android.view.Window;
 import android.view.WindowManager;
@@ -36,6 +33,7 @@ import android.widget.ImageButton;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+@SuppressLint("ClickableViewAccessibility")
 @TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
 public class CameraActivity extends Activity {
     
@@ -54,9 +52,6 @@ public class CameraActivity extends Activity {
     private static final int HEADER_HEIGHT = 54;
     private static final int FRAME_BORDER_SIZE = 34;
     
-    private static final String FOCUS_MODE_AUTO = android.hardware.Camera.Parameters.FOCUS_MODE_AUTO;
-    private static final String FLASH_MODE_AUTO = android.hardware.Camera.Parameters.FLASH_MODE_AUTO;
-    
     private Camera camera;
     private RelativeLayout layout;
     private FrameLayout cameraPreviewView;
@@ -66,11 +61,14 @@ public class CameraActivity extends Activity {
     private ImageButton captureButton;
     private ProgressDialog progressDlg;
     private Bitmap lightButton, darkButton;
-    private MediaPlayer shootMP;
+    private int autoFocusErrCounter;
     
+    public CameraActivity() {
+        autoFocusErrCounter = 0;
+    }
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK ) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
             dismiss();
         }
         return super.onKeyDown(keyCode, event);
@@ -81,7 +79,6 @@ public class CameraActivity extends Activity {
         super.onResume();
         try {
             openCamera();
-            configureCamera();
             displayCameraPreview();
         } catch (Exception ex) {
             finishWithError("Camera is not accessible.", ex);
@@ -89,18 +86,29 @@ public class CameraActivity extends Activity {
     }
     
     private void configureCamera() {
-        
-        Camera.Parameters cameraSettings = camera.getParameters();
+        Camera.Parameters cameraSettings = getCamera().getParameters();
         cameraSettings.setJpegQuality(100);
-        cameraSettings.setFocusMode(FOCUS_MODE_AUTO);
-        cameraSettings.setFlashMode(FLASH_MODE_AUTO);
-        
-        camera.setParameters(cameraSettings);
+        cameraSettings.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+        cameraSettings.setFlashMode(Camera.Parameters.FLASH_MODE_AUTO);
+        setZoom(cameraSettings);
+        getCamera().setParameters(cameraSettings);
+    }
+    
+    private void setZoom(Camera.Parameters cameraSettings) {
+        // zoom in if supported
+        if (cameraSettings.isZoomSupported()) {
+            List<Integer> zoomRatios = cameraSettings.getZoomRatios();
+            int zoomTotIdx = zoomRatios.size();
+            if (zoomTotIdx / 5 < zoomTotIdx) {
+                int newZoomIndex = (int) (zoomTotIdx * 0.05);
+                cameraSettings.setZoom(newZoomIndex);
+            }
+        }
     }
     
     private void displayCameraPreview() {
         cameraPreviewView.removeAllViews();
-        cameraPreviewView.addView(new CameraPreview(this, camera));
+        cameraPreviewView.addView(new CameraPreview(this));
     }
     
     @Override
@@ -116,6 +124,7 @@ public class CameraActivity extends Activity {
     private void openCamera() {
         if (camera == null) {
             camera = Camera.open();
+            configureCamera();
         }
     }
     
@@ -133,8 +142,7 @@ public class CameraActivity extends Activity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         layout = new RelativeLayout(this);
-        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT,
-                                                                                   LayoutParams.MATCH_PARENT);
+        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         layout.setLayoutParams(layoutParams);
         
         createCameraPreview();
@@ -152,13 +160,6 @@ public class CameraActivity extends Activity {
         cameraPreviewView.setLayoutParams(layoutParams);
         cameraPreviewView.setX(pixelsToDp(FRAME_BORDER_SIZE));
         cameraPreviewView.setY(pixelsToDp(FRAME_BORDER_SIZE));
-        cameraPreviewView.setOnTouchListener(new OnTouchListener(){
-            @Override
-            public boolean onTouch(View v, MotionEvent e){
-                camera.autoFocus(null);
-                return true;
-            }
-        });
         layout.addView(cameraPreviewView);
     }
     
@@ -169,10 +170,10 @@ public class CameraActivity extends Activity {
         progressDlg.setIndeterminate(true);
         progressDlg.setCancelable(false);
     }
+    
     private void createFrame() {
         // Header
-        RelativeLayout.LayoutParams headerLayoutParams = new RelativeLayout.LayoutParams(pixelsToDp(HEADER_HEIGHT),
-                                                                                         LayoutParams.MATCH_PARENT);
+        RelativeLayout.LayoutParams headerLayoutParams = new RelativeLayout.LayoutParams(pixelsToDp(HEADER_HEIGHT), LayoutParams.MATCH_PARENT);
         headerLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
         headerLayoutParams.addRule(RelativeLayout.CENTER_IN_PARENT);
         View headerView = new View(this);
@@ -181,8 +182,7 @@ public class CameraActivity extends Activity {
         layout.addView(headerView);
         
         // Header Message
-        RelativeLayout.LayoutParams logoLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT,
-                                                                                       LayoutParams.MATCH_PARENT);
+        RelativeLayout.LayoutParams logoLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         logoLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
         logoLayoutParams.rightMargin = pixelsToDp(6);
         headerText = new VerticalTextView(this);
@@ -209,16 +209,14 @@ public class CameraActivity extends Activity {
         layout.addView(rightPaneView);
         
         // Bottom Pane
-        RelativeLayout.LayoutParams bottomPaneLayoutParams = new RelativeLayout.LayoutParams(
-                                                                                             pixelsToDp(FRAME_BORDER_SIZE), getScreenHeightInPixels());
+        RelativeLayout.LayoutParams bottomPaneLayoutParams = new RelativeLayout.LayoutParams(pixelsToDp(FRAME_BORDER_SIZE), getScreenHeightInPixels());
         View bottomPaneView = new View(this);
         bottomPaneView.setBackgroundColor(0xFFB9C7D4);
         bottomPaneView.setLayoutParams(bottomPaneLayoutParams);
         layout.addView(bottomPaneView);
         
         // Top Pane
-        RelativeLayout.LayoutParams topPaneLayoutParams = new RelativeLayout.LayoutParams(
-                                                                                          pixelsToDp(FRAME_BORDER_SIZE), getScreenHeightInPixels());
+        RelativeLayout.LayoutParams topPaneLayoutParams = new RelativeLayout.LayoutParams(pixelsToDp(FRAME_BORDER_SIZE), getScreenHeightInPixels());
         topPaneLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
         topPaneLayoutParams.rightMargin = pixelsToDp(HEADER_HEIGHT);
         View topPaneView = new View(this);
@@ -227,8 +225,7 @@ public class CameraActivity extends Activity {
         layout.addView(topPaneView);
         
         // Front/Back Title
-        RelativeLayout.LayoutParams titleLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT,
-                                                                                        LayoutParams.MATCH_PARENT);
+        RelativeLayout.LayoutParams titleLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         titleLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
         titleLayoutParams.rightMargin = pixelsToDp(HEADER_HEIGHT + 6);
         titleLayoutParams.topMargin = pixelsToDp(FRAME_BORDER_SIZE);
@@ -239,8 +236,7 @@ public class CameraActivity extends Activity {
         layout.addView(titleText);
         
         // Cancel Button
-        RelativeLayout.LayoutParams cancelLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT,
-                                                                                         LayoutParams.MATCH_PARENT);
+        RelativeLayout.LayoutParams cancelLayoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         cancelLayoutParams.leftMargin = pixelsToDp(FRAME_BORDER_SIZE);
         cancelText = new TextView(this);
         cancelText.setY(getScreenHeightInPixels() - (pixelsToDp(FRAME_BORDER_SIZE) * 2) + pixelsToDp(20));
@@ -261,28 +257,6 @@ public class CameraActivity extends Activity {
         layout.addView(cropMarks);
     }
     
-    public void shootSound()
-    {
-        AudioManager meng = (AudioManager) getBaseContext().getSystemService(Context.AUDIO_SERVICE);
-        int currentVolume = meng.getStreamVolume(AudioManager.STREAM_MUSIC);
-        
-        if (currentVolume != 0)
-        {
-            if (shootMP == null) {
-                shootMP = MediaPlayer.create(getBaseContext(), Uri.parse("file:///system/media/audio/ui/camera_click.ogg"));
-                int maxVolume = meng.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                float percent = 0.7f;
-                int seventyVolume = (int) (maxVolume * percent);
-                meng.setStreamVolume(AudioManager.STREAM_MUSIC, seventyVolume, 0);
-            }
-            
-            if (shootMP != null){
-                
-                shootMP.start();
-            }
-            
-        }
-    }
     private void createCaptureButton() {
         try {
             InputStream inputStream = getAssets().open("www/img/buttonup.png");
@@ -294,10 +268,8 @@ public class CameraActivity extends Activity {
             LOG.e(ERROR_MESSAGE, "Button image(s) not found.");
         }
         
-        lightButton = Bitmap.createScaledBitmap(lightButton, pixelsToDp(FRAME_BORDER_SIZE) * 2,
-                                                pixelsToDp(FRAME_BORDER_SIZE) * 2, false);
-        darkButton = Bitmap.createScaledBitmap(darkButton, pixelsToDp(FRAME_BORDER_SIZE) * 2,
-                                               pixelsToDp(FRAME_BORDER_SIZE) * 2, false);
+        lightButton = Bitmap.createScaledBitmap(lightButton, pixelsToDp(FRAME_BORDER_SIZE) * 2, pixelsToDp(FRAME_BORDER_SIZE) * 2, false);
+        darkButton = Bitmap.createScaledBitmap(darkButton, pixelsToDp(FRAME_BORDER_SIZE) * 2, pixelsToDp(FRAME_BORDER_SIZE) * 2, false);
         
         captureButton = new ImageButton(this);
         captureButton.setImageBitmap(lightButton);
@@ -331,6 +303,9 @@ public class CameraActivity extends Activity {
         }
     }
     
+    public Camera getCamera() {
+        return camera;
+    }
     private int getScreenWidthInPixels() {
         Point size = new Point();
         getWindowManager().getDefaultDisplay().getSize(size);
@@ -343,41 +318,89 @@ public class CameraActivity extends Activity {
         return size.y;
     }
     
-    private void takePictureWithAutoFocus() {
-        try{
-            Camera.Parameters cameraSettings = camera.getParameters();
-            List<String> supportedFocusModes = cameraSettings.getSupportedFocusModes();
-            if (supportedFocusModes.contains(FOCUS_MODE_AUTO)) {
-                camera.autoFocus(new AutoFocusCallback() {
+    private void adjustFocus() {
+        Camera.Parameters settings = getCamera().getParameters();
+        LOG.d(TAG, "Focus Error Counter:" + autoFocusErrCounter);
+        if(autoFocusErrCounter == 0) {
+            if (settings.isAutoWhiteBalanceLockSupported()) {
+                settings.setAutoWhiteBalanceLock(true);
+            }
+            if (settings.isAutoExposureLockSupported()) {
+                settings.setAutoExposureLock(true);
+            }
+            int maxExposure = settings.getMaxExposureCompensation();
+            if (maxExposure > 0) {
+                settings.setExposureCompensation((int)(maxExposure * 0.50));
+            }
+            getCamera().setParameters(settings);
+            takePictureWithAutoFocus();
+        } else if (autoFocusErrCounter == 1) {
+            settings.setExposureCompensation(0);
+            settings.setFlashMode(Camera.Parameters.FLASH_MODE_ON);
+            getCamera().setParameters(settings);
+            takePictureWithAutoFocus();
+        } else {
+            takePicture();
+        }
+        autoFocusErrCounter++;
+    }
+    public void takePictureWithAutoFocus() {
+        try {
+            Camera.Parameters cameraSettings = getCamera().getParameters();
+            setInProgress(true);
+            if (cameraSettings.getMaxNumFocusAreas() > 0) {
+                getCamera().autoFocus(
+                                      new AutoFocusCallback() {
                     @Override
                     public void onAutoFocus(boolean success, Camera camera) {
                         if (success) {
-                            shootSound();
-                            captureButton.setEnabled(false);
-                            Log.d(TAG, "calling takePicture()");
+                            Log.d(TAG, "Camera has autofocus and successful focus on the object");
                             takePicture();
-                            camera.cancelAutoFocus();
+                            autoFocusErrCounter = 0;
+                        } else {
+                            Log.d(TAG, "Camera has autofocus and failed focus on the object");
+                            getCamera().cancelAutoFocus();
+                            adjustFocus();
                         }
                     }
                 });
+            } else {
+                takePicture();
             }
         } catch (Exception ex) {
             finishWithError("Failed to take image.", ex);
         }
     }
     
+    public void setInProgress(boolean value) {
+        // use captureButton state for now.
+        captureButton.setEnabled(!value);
+    }
+    public boolean isInprogress() {
+        return !captureButton.isEnabled();
+    }
     private void takePicture() {
         try {
-            camera.takePicture(null, null, new PictureCallback() {
+            getCamera().takePicture(
+                                    new ShutterCallback(){
+                @Override
+                public void onShutter() {
+                    setInProgress(true);
+                }
+            },
+                                    null,
+                                    new PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] jpegData, Camera camera) {
+                    Log.d(TAG, "Picture taken");
                     int targetWidth = getIntent().getIntExtra(TARGET_WIDTH, 1600);
                     int targetHeight = getIntent().getIntExtra(TARGET_HEIGHT, 1200);
                     int picQuality = getIntent().getIntExtra(QUALITY, 30);
-                    ProcessImageTask processImageTask = new ProcessImageTask(targetWidth, targetHeight, picQuality, new ProcessImageListener(){
+                    ProcessImageTask processImageTask = new ProcessImageTask(targetWidth, targetHeight, picQuality, new ProcessImageListener() {
                         public void onStarted() {
                             progressDlg.show();
                         }
+                        
                         public void onCompleted(String imageData) {
                             Intent data = new Intent();
                             data.putExtra(IMAGE_DATA, imageData);
@@ -396,7 +419,7 @@ public class CameraActivity extends Activity {
     }
     
     private void dismiss() {
-    	Intent data = new Intent().putExtra(ERROR_MESSAGE, (String)null);
+        Intent data = new Intent().putExtra(ERROR_MESSAGE, (String) null);
         setResult(RESULT_ERROR, data);
         finish();
     }
